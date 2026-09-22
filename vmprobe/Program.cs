@@ -10,11 +10,14 @@ using System.Runtime.InteropServices;
 const ulong window = 1UL << 31;   // +-2GB, the rel32 bound detours need
 
 var total = Stopwatch.StartNew();
-var task = Native.task_self_trap();
 
 var target = (ulong)typeof(Target).GetMethod(nameof(Target.Code), BindingFlags.Public | BindingFlags.Static).MethodHandle.GetFunctionPointer();
 var page = 16384UL;
 Console.WriteLine($"target page = 0x{target & ~(page - 1):x16}");
+
+try
+{
+var task = Native.task_self_trap();
 
 // (a) walk the region map outward from the target, exactly like the allocator's search does
 var addr = target & ~(page - 1);
@@ -40,6 +43,11 @@ while (true)
 sw.Stop();
 var usPerQuery = (double)queryTicks / Stopwatch.Frequency * 1e6 / Math.Max(regions, 1);
 Console.WriteLine($"region walk: regions={regions} wallMs={sw.ElapsedMilliseconds} usPerQuery={usPerQuery:F1} projectedMsForRegions={usPerQuery * regions / 1000:F0}");
+}
+catch (Exception e)
+{
+    Console.WriteLine($"region walk unavailable: {e.GetType().Name} {e.Message}");
+}
 
 // (b) is the rest of the VM path healthy?
 var mallocSw = Stopwatch.StartNew();
