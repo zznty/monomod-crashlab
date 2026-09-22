@@ -42,8 +42,9 @@ jobs:
       - name: Install SOS
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
-          dotnet tool install -g dotnet-sos
+          dotnet tool install -g dotnet-sos --prerelease || dotnet tool install -g dotnet-sos
           dotnet-sos install
+          find "$HOME/.dotnet" -name 'libsosplugin.dylib' | head -1
           find "$HOME/.dotnet/sos" -maxdepth 3 -name 'libsosplugin*' 2>/dev/null || echo "no sos plugin found"
 
       - name: Build net11.0 test assets
@@ -94,6 +95,21 @@ jobs:
             -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
             -o "detach" -o "quit" > sos-out/lldb-sos.txt 2>&1
           echo "sos rc=$?"
+
+          echo "=== analyze the core on THIS machine (module UUIDs match) ==="
+          plugin=$(find "$HOME/.dotnet" -name 'libsosplugin.dylib' | head -1)
+          core=$(ls sos-out/core.* 2>/dev/null | head -1)
+          if [ -n "$plugin" ] && [ -n "$core" ]; then
+            arch -x86_64 lldb --batch -c "$core" \
+              -o "plugin load $plugin" \
+              -o "clrthreads" \
+              -o "clrstack -all" \
+              -o "syncblk -all" \
+              -o "dumpheap -stat -type System.Threading.LowLevelLock" \
+              -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
+              -o "quit" > sos-out/analysis-same-machine.txt 2>&1
+            echo "same-machine analysis rc=$?"
+          fi
 
           kill -9 "$suite" "$pid" 2>/dev/null
           echo "=== suite tail ==="
