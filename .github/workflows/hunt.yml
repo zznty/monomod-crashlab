@@ -146,12 +146,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        include:
+          - { shard: 1, pgo: on }
+          - { shard: 2, pgo: off }
     env:
-      # same knobs as the failing row: Test .NET 11.0 x64 on MacOS 14 (PGO On)
-      DOTNET_ReadyToRun: "0"
-      DOTNET_TC_QuicJitForLoops: "1"
-      DOTNET_TieredPGO: "1"
+      # "on" reproduces the failing row; "off" is the control
+      DOTNET_ReadyToRun: ${{ matrix.pgo == 'on' && '0' || '1' }}
+      DOTNET_TC_QuicJitForLoops: ${{ matrix.pgo == 'on' && '1' || '0' }}
+      DOTNET_TieredPGO: ${{ matrix.pgo == 'on' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v6
         with:
