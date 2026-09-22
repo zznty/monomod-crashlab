@@ -39,6 +39,7 @@ jobs:
           - { shard: 2, pgo: "off" }
     env:
       # "on" reproduces the failing row; "off" is the control
+      MONOMOD_NEAR_ALLOC_LOG: ${{ github.workspace }}/hunt/shard-${{ matrix.shard }}/near-alloc.log
       DOTNET_ReadyToRun: ${{ matrix.pgo == 'on' && '0' || '1' }}
       DOTNET_TC_QuicJitForLoops: ${{ matrix.pgo == 'on' && '1' || '0' }}
       DOTNET_TieredPGO: ${{ matrix.pgo == 'on' && '1' || '0' }}
