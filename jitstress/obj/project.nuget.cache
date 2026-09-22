@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "uyKnwtH09bw=",
+  "success": true,
+  "projectFilePath": "/home/zznty/projects/monomod-crashlab/jitstress/jitstress.csproj",
+  "expectedPackageFiles": [
+    "/home/zznty/.nuget/packages/microsoft.aspnetcore.app.ref/11.0.0-rc.1.26425.128/microsoft.aspnetcore.app.ref.11.0.0-rc.1.26425.128.nupkg.sha512"
+  ],
+  "logs": []
+}

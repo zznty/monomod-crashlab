@@ -1,0 +1,16 @@
+/home/zznty/projects/monomod-crashlab/jitstress/bin/Release/net11.0/jitstress
+/home/zznty/projects/monomod-crashlab/jitstress/bin/Release/net11.0/jitstress.deps.json
+/home/zznty/projects/monomod-crashlab/jitstress/bin/Release/net11.0/jitstress.runtimeconfig.json
+/home/zznty/projects/monomod-crashlab/jitstress/bin/Release/net11.0/jitstress.dll
+/home/zznty/projects/monomod-crashlab/jitstress/bin/Release/net11.0/jitstress.pdb
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.GeneratedMSBuildEditorConfig.editorconfig
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.AssemblyInfoInputs.cache
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.AssemblyInfo.cs
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.csproj.CoreCompileInputs.cache
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.sourcelink.json
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.dll
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/refint/jitstress.dll
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.pdb
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.genruntimeconfig.cache
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/ref/jitstress.dll
+/home/zznty/projects/monomod-crashlab/jitstress/obj/Release/net11.0/jitstress.csproj.Up2Date

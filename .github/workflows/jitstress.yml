@@ -1,0 +1,69 @@
+name: jitstress
+
+# Runtime-only control: is managed JIT churn (what MonoMod's JIT hook adds) required for the stall?
+# Runs the probe on the same image as the failing row (macos-14, x64 under Rosetta), with the
+# failing row's PGO knobs, and captures a sample + managed stacks if it wedges.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  jitstress:
+    name: jitstress control (runtime only, no MonoMod)
+    runs-on: macos-14
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build jitstress
+        run: dotnet build -c Release jitstress/jitstress.csproj
+
+      - name: Run jitstress (PGO on, capture on stall)
+        env:
+          DOTNET_ReadyToRun: "0"
+          DOTNET_TieredPGO: "1"
+          DOTNET_TC_QuicJitForLoops: "1"
+        run: |
+          set +e
+          mkdir -p jitstress-out/run-${{ matrix.run }}
+          ./scripts/capture-on-hang.sh 150 "jitstress-out/run-${{ matrix.run }}" \
+            dotnet jitstress/bin/Release/net11.0/jitstress.dll
+          rc=$?
+          echo "jitstress rc=$rc"
+          exit "$rc"
+
+      - name: Run jitstress (PGO off, capture on stall)
+        env:
+          DOTNET_ReadyToRun: "1"
+          DOTNET_TieredPGO: "0"
+          DOTNET_TC_QuicJitForLoops: "0"
+        run: |
+          set +e
+          mkdir -p jitstress-out/run-${{ matrix.run }}-pgoff
+          ./scripts/capture-on-hang.sh 150 "jitstress-out/run-${{ matrix.run }}-pgoff" \
+            dotnet jitstress/bin/Release/net11.0/jitstress.dll
+          rc=$?
+          echo "jitstress(pgoff) rc=$rc"
+          exit "$rc"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jitstress-${{ matrix.run }}
+          path: jitstress-out
+          if-no-files-found: ignore
