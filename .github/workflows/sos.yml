@@ -1,0 +1,104 @@
+name: sos
+
+# On a stuck test host: write a full core with lldb's own writer (memory-based; createdump fails on
+# translated threads because thread_get_state rejects x86-64 register flavours), then also read the runtime's
+# lock state live through SOS. Uploads whichever of the two we manage to get.
+
+on:
+  workflow_dispatch:
+    inputs:
+      idle_seconds:
+        description: Seconds of no test output before attaching
+        default: "240"
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+
+jobs:
+  dump:
+    name: core + live lock state from a stuck test host
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      DOTNET_ReadyToRun: "0"
+      DOTNET_TC_QuicJitForLoops: "1"
+      DOTNET_TieredPGO: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install SOS
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet tool install -g dotnet-sos
+          dotnet-sos install
+          find "$HOME/.dotnet/sos" -maxdepth 3 -name 'libsosplugin*' 2>/dev/null || echo "no sos plugin found"
+
+      - name: Build net11.0 test assets
+        run: dotnet build -c Release src/MonoMod.UnitTest/MonoMod.UnitTest.csproj -f net11.0
+
+      - name: Run suite, dump on silence
+        run: |
+          set +e
+          mkdir -p sos-out
+          log=sos-out/suite.log
+          dotnet test -f net11.0 -a x64 --no-build -c Release \
+            artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll \
+            -l:"console;verbosity=normal" > "$log" 2>&1 &
+          suite=$!
+
+          idle=${{ github.event.inputs.idle_seconds }}
+          while kill -0 "$suite" 2>/dev/null; do
+            sleep 15
+            if [ $(( $(date +%s) - $(stat -f %m "$log") )) -ge "$idle" ]; then
+              echo "no output for ${idle}s -- attaching"
+              break
+            fi
+          done
+          kill -0 "$suite" 2>/dev/null || { echo "suite finished on its own"; wait "$suite"; echo "rc=$?"; tail -3 "$log"; exit 0; }
+
+          pid=$(pgrep -f 'testhost.dll' | head -1)
+          [ -z "$pid" ] && pid=$(pgrep -f 'vstest.console' | head -1)
+          echo "pid=$pid" | tee sos-out/pid.txt
+          ps -o pid,ppid,command -p "$pid" || true
+
+          echo "=== attempt lldb save-core ==="
+          lldb --batch -p "$pid" \
+            -o "process save-core sos-out/core.$pid" \
+            -o "detach" -o "quit" > sos-out/save-core.txt 2>&1
+          echo "save-core rc=$?"
+          tail -20 sos-out/save-core.txt
+          ls -la sos-out/ || true
+
+          echo "=== live SOS state ==="
+          lldb --batch -p "$pid" \
+            -o "clrthreads" \
+            -o "clrstack -all" \
+            -o "syncblk -all" \
+            -o "dumpheap -stat -type System.Threading.LowLevelLock" \
+            -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
+            -o "detach" -o "quit" > sos-out/lldb-sos.txt 2>&1
+          echo "sos rc=$?"
+
+          kill -9 "$suite" "$pid" 2>/dev/null
+          echo "=== suite tail ==="
+          tail -5 "$log"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sos-capture
+          path: sos-out
+          if-no-files-found: ignore
