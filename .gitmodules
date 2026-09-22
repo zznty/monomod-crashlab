@@ -1,0 +1,3 @@
+[submodule "mono-mod"]
+	path = mono-mod
+	url = https://github.com/zznty/MonoMod.git

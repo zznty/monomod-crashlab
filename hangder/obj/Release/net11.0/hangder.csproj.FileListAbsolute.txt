@@ -1,0 +1,16 @@
+/home/zznty/projects/monomod-crashlab/hangder/bin/Release/net11.0/hangder
+/home/zznty/projects/monomod-crashlab/hangder/bin/Release/net11.0/hangder.deps.json
+/home/zznty/projects/monomod-crashlab/hangder/bin/Release/net11.0/hangder.runtimeconfig.json
+/home/zznty/projects/monomod-crashlab/hangder/bin/Release/net11.0/hangder.dll
+/home/zznty/projects/monomod-crashlab/hangder/bin/Release/net11.0/hangder.pdb
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.GeneratedMSBuildEditorConfig.editorconfig
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.AssemblyInfoInputs.cache
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.AssemblyInfo.cs
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.csproj.CoreCompileInputs.cache
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.sourcelink.json
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.dll
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/refint/hangder.dll
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.pdb
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.genruntimeconfig.cache
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/ref/hangder.dll
+/home/zznty/projects/monomod-crashlab/hangder/obj/Release/net11.0/hangder.csproj.Up2Date

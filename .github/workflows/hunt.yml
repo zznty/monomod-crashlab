@@ -1,0 +1,162 @@
+name: hunt
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Suite iterations per shard
+        default: "6"
+      budget:
+        description: Seconds before a run counts as hung
+        default: "240"
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+  # same dump environment the MonoMod CI test jobs use
+  DOTNET_DbgEnableMiniDump: "1"
+  DOTNET_DbgMiniDumpName: "${{ github.workspace }}/dumps/dump_%e_%p.dmp"
+  DOTNET_DbgMiniDumpType: "4"
+  DOTNET_CreateDumpDiagnostics: "1"
+  COMPlus_DbgEnableMiniDump: "1"
+  COMPlus_DbgMiniDumpName: "${{ github.workspace }}/dumps/dump_%e_%p.dmp"
+  COMPlus_DbgMiniDumpType: "4"
+
+jobs:
+  capture-selftest:
+    name: selftest - does hang capture actually work
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install dotnet-stack
+        run: dotnet tool install -g dotnet-stack
+
+      - name: Build hangder
+        run: |
+          dotnet build -c Release hangder/hangder.csproj
+          ls -la hangder/bin/Release/net11.0/
+
+      - name: Capture a deliberate hang
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          mkdir -p selftest
+          ./scripts/capture-on-hang.sh 20 selftest dotnet hangder/bin/Release/net11.0/hangder.dll || true
+          ls -la selftest
+
+      - name: Assert the capture is real
+        run: |
+          set -euo pipefail
+          test -f selftest/HANG
+          grep -q 'HANG: pid' selftest/command.log
+          bytes=$(cat selftest/sample.*.txt | wc -c | tr -d ' ')
+          echo "native sample bytes: $bytes"
+          [ "$bytes" -gt 2000 ]
+          grep -q 'Call graph' selftest/sample.*.txt
+          grep -q 'hangder-spin' selftest/managed.*.txt
+          echo "SELFTEST-OK: native sampler + managed stack capture both work"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: selftest
+          path: selftest
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: selftest-runtime-dumps
+          path: dumps
+          if-no-files-found: ignore
+
+  hunt:
+    name: hunt shard ${{ matrix.shard }}
+    needs: capture-selftest
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      # same knobs as the failing row: Test .NET 11.0 x64 on MacOS 14 (PGO On)
+      DOTNET_ReadyToRun: "0"
+      DOTNET_TC_QuicJitForLoops: "1"
+      DOTNET_TieredPGO: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+          git -C mono-mod log --oneline -1
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install dotnet-stack
+        run: dotnet tool install -g dotnet-stack
+
+      - name: Build net11.0 test assets
+        run: |
+          dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          dotnet build --no-restore -c Release -f net11.0 mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          ls -la mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll
+
+      - name: Hunt for the hang
+        env:
+          ITERS: ${{ github.event.inputs.iterations }}
+          BUDGET: ${{ github.event.inputs.budget }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set +e
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dll=mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll
+          out=hunt/shard-$SHARD
+          mkdir -p "$out"
+          hangs=0
+          for i in $(seq 1 "$ITERS"); do
+            echo "=== shard $SHARD iteration $i/$ITERS ==="
+            ./scripts/capture-on-hang.sh "$BUDGET" "$out/iter$i" \
+              dotnet test -f net11.0 -a x64 --no-build -c Release "$dll" \
+              -l:"trx;LogFileName=iter$i.trx"
+            rc=$?
+            echo "=== shard $SHARD iteration $i rc=$rc ==="
+            if [ "$rc" -eq 100 ]; then
+              hangs=$((hangs + 1))
+              echo "HANG CAPTURED (shard $SHARD iteration $i)"
+              break
+            fi
+          done
+          echo "shard $SHARD done: hangs=$hangs"
+          exit "$hangs"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: hunt-shard-${{ matrix.shard }}
+          path: |
+            hunt
+            TestResults
+            dumps
+          if-no-files-found: ignore
