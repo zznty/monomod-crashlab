@@ -68,7 +68,15 @@ jobs:
           echo "native sample bytes: $bytes"
           [ "$bytes" -gt 2000 ]
           grep -q 'Call graph' selftest/sample.*.txt
-          grep -q 'hangder-spin' selftest/managed.*.txt
+          # managed stacks must resolve to our app's own frames
+          grep -q 'hangder!' selftest/managed.*.txt
+          echo "captured: $(grep -o 'Code Type:.*' selftest/sample.*.txt | head -1)"
+          # report (not assert) whether the runtime's own dump worked on this runner
+          if grep -q 'thread_get_state' selftest/command.log; then
+            echo "createdump FAILED on this runner: $(grep -o 'thread_get_state.*' selftest/command.log | head -1)"
+          else
+            echo "createdump produced no error line on this runner"
+          fi
           echo "SELFTEST-OK: native sampler + managed stack capture both work"
 
       - uses: actions/upload-artifact@v7

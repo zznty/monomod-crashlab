@@ -16,8 +16,11 @@ outdir=$2
 shift 2
 mkdir -p "$outdir"
 log="$outdir/command.log"
+: >"$log"
 
-"$@" >"$log" 2>&1 &
+# append mode on the child too: a child fd opened with '>' keeps its own file offset, and any
+# write it makes after our own appends would otherwise overwrite them (child offset < file size)
+"$@" >>"$log" 2>&1 &
 root=$!
 
 hang=0
@@ -37,7 +40,9 @@ if [ "$hang" -eq 0 ]; then
     exit $rc
 fi
 
-echo "HANG: pid $root alive after ${budget}s -- capturing" | tee "$outdir/HANG" >>"$log"
+hang_msg="HANG: pid $root alive after ${budget}s -- capturing"
+echo "$hang_msg" >>"$outdir/HANG"
+echo "$hang_msg" >>"$log"
 
 # process tree: driver, its children (testhost), and their children
 pids="$root"
