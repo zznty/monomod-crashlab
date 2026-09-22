@@ -62,7 +62,16 @@ jobs:
             exit 0
           fi
 
-          lldb --batch -c "$core" \
+          echo "--- arch diagnostics" >> cap/analysis.txt
+          file /usr/bin/lldb >> cap/analysis.txt 2>&1
+          lipo -info /usr/bin/lldb >> cap/analysis.txt 2>&1
+          file "$plugin" >> cap/analysis.txt 2>&1
+
+          echo "--- native (arm64) lldb + x64 plugin" >> cap/analysis.txt
+          lldb --batch -c "$core" -o "plugin load $plugin" -o "quit" >> cap/analysis.txt 2>&1
+
+          echo "--- x86_64 lldb under Rosetta + x64 plugin" >> cap/analysis.txt
+          arch -x86_64 lldb --batch -c "$core" \
             -o "plugin load $plugin" \
             -o "clrthreads" \
             -o "clrstack -all" \
@@ -70,7 +79,7 @@ jobs:
             -o "dumpheap -stat -type System.Threading.LowLevelLock" \
             -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
             -o "quit" >> cap/analysis.txt 2>&1
-          echo "lldb rc=$?" | tee -a cap/analysis.txt
+          echo "arch -x86_64 lldb rc=$?" >> cap/analysis.txt
 
           echo "=== fallback: ClrMD on a full-style core is not possible on this image; keep lldb output above" | tee -a cap/analysis.txt
           wc -l cap/analysis.txt
