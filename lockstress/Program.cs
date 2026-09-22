@@ -1,81 +1,90 @@
-// Runtime-only control for the GitHub hang: does the .NET thread/waitsubsystem machinery stall on
-// this host with no MonoMod in the picture?
+// Runtime-only control for the GitHub hang: does the .NET thread/wait machinery stall on this host
+// with no MonoMod in the picture?
 //
-// Mirrors the shape of the captured stall: a hot plain-object monitor contended by many threads
-// (the holder was stuck in Monitor.Exit -> waiter signalling -> LowLevelLock) plus threads churning
-// an EventWaitHandle, which is what MonoMod's log sink does once per message.
+// The captured stall ended in System.Threading.Lock.SignalWaiterIfNecessary, which is only reachable
+// from Lock.Exit, so this probe runs four groups and reports progress per group:
+//   plain  - lock(object)                      (the previous control, known to pass)
+//   lock   - lock(System.Threading.Lock)       (the primitive that appears in the stall)
+//   event  - EventWaitHandle.Set + WaitOne(1)  (what MonoMod's log sink does per message)
+//   waiter - Lock.EnterScope contention + Yield (forces waiter signalling in Lock.Exit)
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
-const int Lockers = 8;
-const int Eventers = 4;
 const int Seconds = 45;
 
-var gate = new object();
+var plainGate = new object();
+var lockGate = new Lock();
 var evt = new EventWaitHandle(false, EventResetMode.AutoReset);
 var stop = new ManualResetEventSlim(false);
-long progress = 0;
-int wedged = 0;
 
-Console.WriteLine($"lockstress: {Lockers} lockers + {Eventers} eventers for {Seconds}s");
+long plainProgress = 0, lockProgress = 0, eventProgress = 0, waiterProgress = 0;
 
-var threads = new List<Thread>();
-for (int i = 0; i < Lockers; i++)
+Console.WriteLine($"lockstress2: for {Seconds}s (process={RuntimeInformation.ProcessArchitecture}, os={RuntimeInformation.OSArchitecture})");
+
+void Spin(string name, Action bump, int count)
 {
-    var t = new Thread(() =>
+    for (int i = 0; i < count; i++)
     {
-        while (!stop.IsSet)
+        var t = new Thread(() =>
         {
-            lock (gate)
+            while (!stop.IsSet)
             {
-                Interlocked.Increment(ref progress);
+                bump();
             }
-        }
-    })
-    { Name = $"locker-{i}", IsBackground = true };
-    threads.Add(t);
+        })
+        { Name = $"{name}-{i}", IsBackground = true };
+        t.Start();
+    }
 }
-for (int i = 0; i < Eventers; i++)
+
+Spin("plain", () => { lock (plainGate) { Interlocked.Increment(ref plainProgress); } }, 8);
+Spin("lock", () => { lock (lockGate) { Interlocked.Increment(ref lockProgress); } }, 8);
+Spin("event", () => { evt.Set(); evt.WaitOne(1); Interlocked.Increment(ref eventProgress); }, 4);
+
+for (int i = 0; i < 4; i++)
 {
     var t = new Thread(() =>
     {
         while (!stop.IsSet)
         {
-            evt.Set();
-            evt.WaitOne(1);
-            Interlocked.Increment(ref progress);
+            using (lockGate.EnterScope())
+            {
+                Interlocked.Increment(ref waiterProgress);
+            }
+            Thread.Yield();
         }
     })
-    { Name = $"eventer-{i}", IsBackground = true };
-    threads.Add(t);
+    { Name = $"waiter-{i}", IsBackground = true };
+    t.Start();
 }
 
-foreach (var t in threads) t.Start();
-
+long lastPlain = 0, lastLock = 0, lastEvent = 0, lastWaiter = 0;
 var sw = Stopwatch.StartNew();
-long lastSample = 0;
+int fullyStalled = 0, lockStalled = 0;
 for (int s = 0; s < Seconds; s++)
 {
     Thread.Sleep(1000);
-    var now = Interlocked.Read(ref progress);
-    var delta = now - lastSample;
-    lastSample = now;
-    Console.WriteLine($"t={s + 1,2}s progress +{delta,10} (total {now}, {sw.ElapsedMilliseconds / 1000}s wall)");
-    if (delta == 0)
+    long p = Interlocked.Read(ref plainProgress), l = Interlocked.Read(ref lockProgress);
+    long e = Interlocked.Read(ref eventProgress), w = Interlocked.Read(ref waiterProgress);
+    Console.WriteLine($"t={s + 1,2}s plain +{p - lastPlain,-9} lock +{l - lastLock,-9} event +{e - lastEvent,-9} waiter +{w - lastWaiter,-9} wall={sw.ElapsedMilliseconds / 1000}s");
+
+    if ((l - lastLock) == 0) { lockStalled++; Console.WriteLine("!!! Lock-group made no progress this second"); }
+    else lockStalled = 0;
+    if (p == lastPlain && l == lastLock && e == lastEvent && w == lastWaiter)
     {
-        wedged++;
-        Console.WriteLine("!!! NO PROGRESS in the last second");
-        if (wedged >= 3) break;
+        fullyStalled++;
+        Console.WriteLine("!!! NO PROGRESS AT ALL this second");
     }
-    else
-    {
-        wedged = 0;
-    }
+    else fullyStalled = 0;
+
+    lastPlain = p; lastLock = l; lastEvent = e; lastWaiter = w;
+    if (fullyStalled >= 3 || lockStalled >= 5) break;
 }
 
 stop.Set();
-if (wedged >= 3)
+if (fullyStalled >= 3 || lockStalled >= 5)
 {
-    Console.WriteLine("RESULT: WEDGED (3 consecutive stalled seconds) - runtime stall reproduces without MonoMod");
+    Console.WriteLine($"RESULT: WEDGED (fullyStalled={fullyStalled}, lockStalled={lockStalled})");
     Environment.Exit(2);
 }
 Console.WriteLine("RESULT: OK (progress every second)");

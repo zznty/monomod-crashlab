@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("lockstress")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0547d1db1e442cad20c3865961436dff136a205a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b99fe573f971572fd41dd06324ec477326a88e54")]
 [assembly: System.Reflection.AssemblyProductAttribute("lockstress")]
 [assembly: System.Reflection.AssemblyTitleAttribute("lockstress")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
