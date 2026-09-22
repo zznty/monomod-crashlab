@@ -93,6 +93,51 @@ jobs:
           path: dumps
           if-no-files-found: ignore
 
+  lockstress:
+    name: lockstress control (runtime only, no MonoMod)
+    runs-on: macos-14
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build lockstress
+        run: dotnet build -c Release lockstress/lockstress.csproj
+
+      - name: Run lockstress
+        env:
+          DOTNET_ReadyToRun: "0"
+          DOTNET_TieredPGO: "1"
+        run: |
+          set +e
+          mkdir -p lockstress-out/run-${{ matrix.run }}
+          ./scripts/capture-on-hang.sh 150 "lockstress-out/run-${{ matrix.run }}" \
+            dotnet lockstress/bin/Release/net11.0/lockstress.dll
+          rc=$?
+          echo "lockstress rc=$rc"
+          exit "$rc"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lockstress-${{ matrix.run }}
+          path: lockstress-out
+          if-no-files-found: ignore
+
   hunt:
     name: hunt shard ${{ matrix.shard }}
     needs: capture-selftest
