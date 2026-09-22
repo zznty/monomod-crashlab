@@ -1,0 +1,74 @@
+name: analyze-core
+
+# Analyzes an lldb-written core from a stuck translated test host with SOS, on the same image the core came
+# from (so the runtime binaries the core references are present). createdump cannot produce dumps for
+# translated processes, but lldb's memory-based writer can.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Run id holding the sos-capture artifact (defaults to the last sos run)
+        required: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  analyze:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Fetch the capture
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          rid="${{ github.event.inputs.source_run }}"
+          if [ -z "$rid" ]; then
+            rid=$(gh run list -R "$GITHUB_REPOSITORY" --workflow sos.yml --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          echo "source run: $rid"
+          mkdir -p cap
+          gh run download "$rid" -R "$GITHUB_REPOSITORY" -n sos-capture -D cap
+          ls -la cap
+          cat cap/pid.txt || true
+
+      - name: Install SDK + SOS
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install diagnostic tools
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet tool install -g dotnet-dump || true
+          dotnet tool install -g dotnet-sos || true
+          dotnet-sos install 2>&1 | tee cap/sos-install.txt || true
+          find "$HOME/.dotnet" -name 'libsosplugin*' 2>/dev/null | tee cap/sos-plugin-paths.txt || true
+
+      - name: Analyze the core
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          set +e
+          core=$(ls cap/core.* 2>/dev/null | head -1)
+          echo "core=$core"
+          dotnet-dump analyze "$core" \
+            -c "clrthreads" \
+            -c "clrstack -all" \
+            -c "syncblk -all" \
+            -c "dumpheap -stat -type System.Threading.LowLevelLock" \
+            -c "dumpheap -stat -type System.Threading.LowLevelMonitor" \
+            -c "exit" > cap/analysis.txt 2>&1
+          echo "dotnet-dump rc=$?"
+          wc -l cap/analysis.txt
+          head -40 cap/analysis.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: core-analysis
+          path: cap/analysis.txt
+          if-no-files-found: ignore
