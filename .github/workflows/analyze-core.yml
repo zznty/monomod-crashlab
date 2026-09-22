@@ -119,8 +119,12 @@ jobs:
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
           set +e
-          dotnet tool install -g dotnet-sos || true
+          dotnet tool install -g dotnet-sos --prerelease || dotnet tool install -g dotnet-sos || true
           dotnet-sos install || true
+          # the core was written on an arm64 runner whose x64 install lives in .dotnet/arch-x64; make that path
+          # resolve here so lldb can match the runtime binaries the core references
+          if [ ! -e "$HOME/.dotnet/arch-x64" ]; then ln -s "$HOME/.dotnet" "$HOME/.dotnet/arch-x64"; fi
+          ls -la "$HOME/.dotnet/arch-x64/shared/Microsoft.NETCore.App" || true
           core=$(ls cap/core.* | head -1)
           plugin=$(find "$HOME/.dotnet" -name 'libsosplugin.dylib' | head -1)
           echo "core=$core plugin=$plugin" | tee cap/intel-analysis.txt
