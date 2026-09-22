@@ -93,7 +93,7 @@ jobs:
 
   analyze-intel:
     name: analyze the same core on a native Intel runner
-    runs-on: macos-13
+    runs-on: macos-15-intel
     timeout-minutes: 45
     steps:
       - name: Fetch the capture
