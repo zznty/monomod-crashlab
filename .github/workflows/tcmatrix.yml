@@ -1,0 +1,85 @@
+name: tcmatrix
+
+# Does the stall depend on tiered compilation / the tier-0 -> tier-1 transition?
+#   pgo        : the failing configuration (ReadyToRun off, TieredPGO on, QuickJitForLoops on)
+#   threshold1 : same, but tier-1 becomes eligible after 1 call (DOTNET_TC_CallCountThreshold=1)
+#   notier     : tiered compilation disabled entirely (all code compiled as tier-1 immediately)
+# The pinned build is the unmodified allocator with the lock timeline, so each run also reports how many page
+# probes each range search performed and how long each hold lasted.
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+  MONOMOD_ALLOC_LOG: "${{ github.workspace }}/alloc-timeline.log"
+
+jobs:
+  config:
+    name: ${{ matrix.config }}
+    runs-on: macos-14
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { config: pgo,        extra: "" }
+          - { config: threshold1, extra: "DOTNET_TC_CallCountThreshold=1" }
+          - { config: notier,     extra: "DOTNET_TieredCompilation=0" }
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build
+        run: |
+          dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          dotnet build --no-restore -c Release -f net11.0 mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+
+      - name: Run suite
+        env:
+          DOTNET_ReadyToRun: "0"
+          DOTNET_TC_QuicJitForLoops: "1"
+          DOTNET_TieredPGO: "1"
+        run: |
+          set +e
+          export ${{ matrix.extra }}
+          env | grep -E '^DOTNET_' | sort | tee env.txt
+          mkdir -p "out"
+          start=$(date +%s)
+          dotnet test -f net11.0 -a x64 --no-build -c Release \
+            mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll \
+            -l:"console;verbosity=normal" > out/suite.log 2>&1 &
+          suite=$!
+          while kill -0 "$suite" 2>/dev/null; do
+            sleep 15
+            if [ $(( $(date +%s) - $(stat -f %m out/suite.log) )) -ge 300 ]; then
+              echo "no output for 300s -> stalled" | tee -a out/suite.log
+              kill -9 "$suite" "$(pgrep -f testhost.dll | head -1)" 2>/dev/null
+              break
+            fi
+          done
+          wait "$suite"; rc=$?
+          echo "rc=$rc wallSeconds=$(( $(date +%s) - start ))" | tee out/result.txt
+          grep -aE 'Passed:|Failed:|Total time' out/suite.log | tail -3 | tee -a out/result.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tcmatrix-${{ matrix.config }}
+          path: |
+            out
+            alloc-timeline.log
+            env.txt
+          if-no-files-found: ignore
