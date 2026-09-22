@@ -30,10 +30,14 @@ jobs:
         run: |
           dotnet build -c Release hintmap/hintmap.csproj
           dotnet hintmap/bin/Release/net11.0/hintmap.dll | tee hintmap-out.txt
+          dotnet build -c Release vmprobe/vmprobe.csproj
+          dotnet vmprobe/bin/Release/net11.0/vmprobe.dll | tee vmprobe-out.txt
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hintmap
-          path: hintmap-out.txt
+          path: |
+            hintmap-out.txt
+            vmprobe-out.txt
           if-no-files-found: ignore
