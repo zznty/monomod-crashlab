@@ -49,22 +49,31 @@ jobs:
           dotnet-sos install 2>&1 | tee cap/sos-install.txt || true
           find "$HOME/.dotnet" -name 'libsosplugin*' 2>/dev/null | tee cap/sos-plugin-paths.txt || true
 
-      - name: Analyze the core
+      - name: Analyze the core (lldb + SOS)
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
           set +e
           core=$(ls cap/core.* 2>/dev/null | head -1)
-          echo "core=$core"
-          dotnet-dump analyze "$core" \
-            -c "clrthreads" \
-            -c "clrstack -all" \
-            -c "syncblk -all" \
-            -c "dumpheap -stat -type System.Threading.LowLevelLock" \
-            -c "dumpheap -stat -type System.Threading.LowLevelMonitor" \
-            -c "exit" > cap/analysis.txt 2>&1
-          echo "dotnet-dump rc=$?"
+          plugin=$(find "$HOME/.dotnet" -name 'libsosplugin.dylib' 2>/dev/null | head -1)
+          echo "core=$core plugin=$plugin" | tee cap/analysis.txt
+          if [ -z "$plugin" ]; then
+            echo "no SOS plugin found; install output follows:" | tee -a cap/analysis.txt
+            cat cap/sos-install.txt 2>/dev/null | tee -a cap/analysis.txt
+            exit 0
+          fi
+
+          lldb --batch -c "$core" \
+            -o "plugin load $plugin" \
+            -o "clrthreads" \
+            -o "clrstack -all" \
+            -o "syncblk -all" \
+            -o "dumpheap -stat -type System.Threading.LowLevelLock" \
+            -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
+            -o "quit" >> cap/analysis.txt 2>&1
+          echo "lldb rc=$?" | tee -a cap/analysis.txt
+
+          echo "=== fallback: ClrMD on a full-style core is not possible on this image; keep lldb output above" | tee -a cap/analysis.txt
           wc -l cap/analysis.txt
-          head -40 cap/analysis.txt
 
       - uses: actions/upload-artifact@v7
         if: always()
