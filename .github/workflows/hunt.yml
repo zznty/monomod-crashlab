@@ -84,7 +84,8 @@ jobs:
             echo "=== shard $SHARD iteration $i/$ITERS ==="
             ./scripts/capture-on-hang.sh "$BUDGET" "$out/iter$i" \
               dotnet test -f net11.0 -a x64 --no-build -c Release "$dll" \
-              -l:"trx;LogFileName=iter$i.trx"
+              -l:"trx;LogFileName=iter$i.trx" \
+              -l:"console;verbosity=normal"
             rc=$?
             echo "=== shard $SHARD iteration $i rc=$rc ==="
             if [ "$rc" -eq 100 ]; then
