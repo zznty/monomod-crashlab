@@ -1,0 +1,39 @@
+name: hintmap
+
+# Does the macOS kernel honour a non-fixed mmap hint near a target page? If it does, a near-range page can be
+# obtained in ~1 syscall instead of walking the VM map region by region (which costs 6-8s per allocation on
+# the translated test host).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hintmap:
+    name: mmap hint behaviour (x64 under Rosetta)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build and run
+        run: |
+          dotnet build -c Release hintmap/hintmap.csproj
+          dotnet hintmap/bin/Release/net11.0/hintmap.dll | tee hintmap-out.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: hintmap
+          path: hintmap-out.txt
+          if-no-files-found: ignore
