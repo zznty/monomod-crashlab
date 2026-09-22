@@ -30,6 +30,7 @@ jobs:
   capture-selftest:
     name: selftest - does hang capture actually work
     runs-on: macos-14
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
 
@@ -96,6 +97,7 @@ jobs:
     name: hunt shard ${{ matrix.shard }}
     needs: capture-selftest
     runs-on: macos-14
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
