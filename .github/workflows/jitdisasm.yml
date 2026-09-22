@@ -1,0 +1,51 @@
+name: jitdisasm
+
+# Dumps the generated code for the allocator methods in the failing configuration, to check whether tier-1/PGO
+# codegen is sane (e.g. the walk loop keeps its induction variable and bound checks) or pathological.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  disasm:
+    name: tier-1 disasm of the allocator (PGO on)
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      DOTNET_ReadyToRun: "0"
+      DOTNET_TC_QuicJitForLoops: "1"
+      DOTNET_TieredPGO: "1"
+      DOTNET_JitDisasmSummary: "1"
+      DOTNET_JitDisasm: "*PagedMemoryAllocator*"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build
+        run: |
+          dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          dotnet build --no-restore -c Release -f net11.0 mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+
+      - name: Run suite with disasm enabled
+        run: |
+          set +e
+          dotnet test -f net11.0 -a x64 --no-build -c Release \
+            mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll \
+            -l:"console;verbosity=normal" > suite.log 2>&1
+          echo "suite rc=$?"
+          grep -c 'Assembly listing' suite.log
+          grep -n 'Tier1\|Optimized\|PagedMemoryAllocator' suite.log | head -40
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jitdisasm
+          path: suite.log
+          if-no-files-found: ignore
