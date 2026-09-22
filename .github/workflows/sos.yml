@@ -47,7 +47,10 @@ jobs:
           find "$HOME/.dotnet/sos" -maxdepth 3 -name 'libsosplugin*' 2>/dev/null || echo "no sos plugin found"
 
       - name: Build net11.0 test assets
-        run: dotnet build -c Release src/MonoMod.UnitTest/MonoMod.UnitTest.csproj -f net11.0
+        run: |
+          dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          dotnet build --no-restore -c Release -f net11.0 mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          ls -la mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll
 
       - name: Run suite, dump on silence
         run: |
@@ -55,7 +58,7 @@ jobs:
           mkdir -p sos-out
           log=sos-out/suite.log
           dotnet test -f net11.0 -a x64 --no-build -c Release \
-            artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll \
+            mono-mod/artifacts/bin/MonoMod.UnitTest/release_net11.0/MonoMod.UnitTest.dll \
             -l:"console;verbosity=normal" > "$log" 2>&1 &
           suite=$!
 
