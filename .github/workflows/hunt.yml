@@ -147,8 +147,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { shard: 1, pgo: on }
-          - { shard: 2, pgo: off }
+          - { shard: 1, pgo: "on" }
+          - { shard: 2, pgo: "off" }
     env:
       # "on" reproduces the failing row; "off" is the control
       DOTNET_ReadyToRun: ${{ matrix.pgo == 'on' && '0' || '1' }}
