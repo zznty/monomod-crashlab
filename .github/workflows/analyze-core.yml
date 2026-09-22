@@ -90,3 +90,55 @@ jobs:
           name: core-analysis
           path: cap/analysis.txt
           if-no-files-found: ignore
+
+  analyze-intel:
+    name: analyze the same core on a native Intel runner
+    runs-on: macos-13
+    timeout-minutes: 45
+    steps:
+      - name: Fetch the capture
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          rid="${{ github.event.inputs.source_run }}"
+          if [ -z "$rid" ]; then
+            rid=$(gh run list -R "$GITHUB_REPOSITORY" --workflow sos.yml --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          mkdir -p cap
+          gh run download "$rid" -R "$GITHUB_REPOSITORY" -n sos-capture -D cap
+          ls -la cap
+
+      - name: Install SDK + SOS
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Analyze with native x86_64 lldb + SOS
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          set +e
+          dotnet tool install -g dotnet-sos || true
+          dotnet-sos install || true
+          core=$(ls cap/core.* | head -1)
+          plugin=$(find "$HOME/.dotnet" -name 'libsosplugin.dylib' | head -1)
+          echo "core=$core plugin=$plugin" | tee cap/intel-analysis.txt
+          file /usr/bin/lldb >> cap/intel-analysis.txt 2>&1
+          lldb --batch -c "$core" \
+            -o "plugin load $plugin" \
+            -o "clrthreads" \
+            -o "clrstack -all" \
+            -o "syncblk -all" \
+            -o "dumpheap -stat -type System.Threading.LowLevelLock" \
+            -o "dumpheap -stat -type System.Threading.LowLevelMonitor" \
+            -o "quit" >> cap/intel-analysis.txt 2>&1
+          echo "lldb rc=$?" >> cap/intel-analysis.txt
+          wc -l cap/intel-analysis.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: core-analysis-intel
+          path: cap/intel-analysis.txt
+          if-no-files-found: ignore
