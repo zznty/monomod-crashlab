@@ -11,12 +11,6 @@ jobs:
     name: tier-1 disasm of the allocator (PGO on)
     runs-on: macos-14
     timeout-minutes: 45
-    env:
-      DOTNET_ReadyToRun: "0"
-      DOTNET_TC_QuicJitForLoops: "1"
-      DOTNET_TieredPGO: "1"
-      DOTNET_JitDisasmSummary: "1"
-      DOTNET_JitDisasm: "*PagedMemoryAllocator*"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -34,6 +28,13 @@ jobs:
           dotnet build --no-restore -c Release -f net11.0 mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
 
       - name: Run suite with disasm enabled
+        env:
+          # scoped to this step: the build above must not JIT with disasm on (MSBuild would spam the log)
+          DOTNET_ReadyToRun: "0"
+          DOTNET_TC_QuicJitForLoops: "1"
+          DOTNET_TieredPGO: "1"
+          DOTNET_JitDisasmSummary: "1"
+          DOTNET_JitDisasm: "*PagedMemoryAllocator*"
         run: |
           set +e
           dotnet test -f net11.0 -a x64 --no-build -c Release \
