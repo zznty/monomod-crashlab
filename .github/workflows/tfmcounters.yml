@@ -1,0 +1,66 @@
+name: tfmcounters
+
+# Same image, same knobs, same suite: how many near-range allocations does each TFM perform and how much time
+# do they cost? net10 finishes this suite in 11s in CI (PGO on) and net11 takes 54s / hangs, on identical
+# hardware, so the difference is in how often a near page is needed, not in the allocator's code.
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+
+jobs:
+  tfm:
+    name: counters on ${{ matrix.tfm }}
+    runs-on: macos-14
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        tfm: ["net10.0", "net11.0"]
+    env:
+      DOTNET_ReadyToRun: "0"
+      DOTNET_TC_QuicJitForLoops: "1"
+      DOTNET_TieredPGO: "1"
+      MONOMOD_NEAR_ALLOC_LOG: "${{ github.workspace }}/out/near-alloc.log"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build
+        run: |
+          dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+          dotnet build --no-restore -c Release -f ${{ matrix.tfm }} mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+
+      - name: Run suite with counters
+        run: |
+          set +e
+          mkdir -p out
+          start=$(date +%s)
+          dotnet test -f ${{ matrix.tfm }} -a x64 --no-build -c Release \
+            mono-mod/artifacts/bin/MonoMod.UnitTest/release_${{ matrix.tfm }}/MonoMod.UnitTest.dll \
+            -l:"console;verbosity=normal" > out/suite.log 2>&1
+          echo "rc=$? wallSeconds=$(( $(date +%s) - start ))" | tee out/result.txt
+          grep -aE 'Passed:|Failed:|Total time' out/suite.log | tail -2 | tee -a out/result.txt
+          tail -3 out/near-alloc.log 2>/dev/null | tee -a out/result.txt
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tfmcounters-${{ matrix.tfm }}
+          path: |
+            out
+          if-no-files-found: ignore
