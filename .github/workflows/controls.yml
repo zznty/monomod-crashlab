@@ -1,0 +1,120 @@
+name: controls
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  capture-selftest:
+    name: selftest - does hang capture actually work
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install dotnet-stack
+        run: dotnet tool install -g dotnet-stack
+
+      - name: Build hangder
+        run: |
+          dotnet build -c Release hangder/hangder.csproj
+          ls -la hangder/bin/Release/net11.0/
+
+      - name: Capture a deliberate hang
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          mkdir -p selftest
+          ./scripts/capture-on-hang.sh 20 selftest dotnet hangder/bin/Release/net11.0/hangder.dll || true
+          ls -la selftest
+
+      - name: Assert the capture is real
+        run: |
+          set -euo pipefail
+          test -f selftest/HANG
+          grep -q 'HANG: pid' selftest/command.log
+          bytes=$(cat selftest/sample.*.txt | wc -c | tr -d ' ')
+          echo "native sample bytes: $bytes"
+          [ "$bytes" -gt 2000 ]
+          grep -q 'Call graph' selftest/sample.*.txt
+          # managed stacks must resolve to our app's own frames
+          grep -q 'hangder!' selftest/managed.*.txt
+          echo "captured: $(grep -o 'Code Type:.*' selftest/sample.*.txt | head -1)"
+          # report (not assert) whether the runtime's own dump worked on this runner
+          if grep -q 'thread_get_state' selftest/command.log; then
+            echo "createdump FAILED on this runner: $(grep -o 'thread_get_state.*' selftest/command.log | head -1)"
+          else
+            echo "createdump produced no error line on this runner"
+          fi
+          echo "SELFTEST-OK: native sampler + managed stack capture both work"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: selftest
+          path: selftest
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: selftest-runtime-dumps
+          path: dumps
+          if-no-files-found: ignore
+
+  lockstress:
+    name: lockstress control (runtime only, no MonoMod)
+    runs-on: macos-14
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Host info
+        run: |
+          uname -m
+          echo "translated(x86-on-arm)=$(sysctl -n sysctl.proc_translated 2>/dev/null || echo n/a)"
+
+      - name: Install .NET SDK (x64)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Build lockstress
+        run: dotnet build -c Release lockstress/lockstress.csproj
+
+      - name: Run lockstress
+        env:
+          DOTNET_ReadyToRun: "0"
+          DOTNET_TieredPGO: "1"
+        run: |
+          set +e
+          mkdir -p lockstress-out/run-${{ matrix.run }}
+          ./scripts/capture-on-hang.sh 150 "lockstress-out/run-${{ matrix.run }}" \
+            dotnet lockstress/bin/Release/net11.0/lockstress.dll
+          rc=$?
+          echo "lockstress rc=$rc"
+          exit "$rc"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lockstress-${{ matrix.run }}
+          path: lockstress-out
+          if-no-files-found: ignore
