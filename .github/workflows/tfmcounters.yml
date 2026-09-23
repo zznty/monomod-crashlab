@@ -56,6 +56,7 @@ jobs:
 
       - name: Code layout probe (${{ matrix.tfm }})
         run: |
+          mkdir -p out
           dotnet build -c Release -f ${{ matrix.tfm }} codeprobe/codeprobe.csproj
           dotnet codeprobe/bin/Release/${{ matrix.tfm }}/codeprobe.dll | tee out/codeprobe.txt
 

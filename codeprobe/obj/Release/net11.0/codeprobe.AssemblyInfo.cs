@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("codeprobe")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+acbabb5820b0aeb3ed62e86e2962002afe5a06aa")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fd1cf4a0a92a5c1d905f78ebad452826d3ea8de2")]
 [assembly: System.Reflection.AssemblyProductAttribute("codeprobe")]
 [assembly: System.Reflection.AssemblyTitleAttribute("codeprobe")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

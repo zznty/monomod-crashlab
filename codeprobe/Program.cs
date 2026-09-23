@@ -57,3 +57,10 @@ for (int i = 0; i < 200000; i++)
 Console.WriteLine($"randomPairs={pairs} beyondRel32={far} ({100.0 * far / pairs:F1}%)");
 var buckets = addrs.GroupBy(a => a >> 30).OrderBy(g => g.Key).Select(g => $"{(g.Key << 30) / (1UL << 30)}GB:{g.Count()}");
 Console.WriteLine("1GB buckets: " + string.Join(" ", buckets));
+
+// a native target (libc) is unreachable by rel32 from any managed code address, so every native detour
+// needs a near trampoline; report the distance for scale
+var native = (ulong)System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate((Func<ulong>)NativeProbe).ToInt64();
+Console.WriteLine($"managed=0x{min:x16} native(probe)=0x{native:x16} distanceGB={(native > min ? native - min : min - native) / (1024.0*1024*1024):F2}");
+
+static ulong NativeProbe() => 0;

@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "lwP4GtTVL54=",
+  "dgSpecHash": "gnC/+Qh+5cE=",
   "success": true,
   "projectFilePath": "/home/zznty/projects/monomod-crashlab/codeprobe/codeprobe.csproj",
   "expectedPackageFiles": [
+    "/home/zznty/.nuget/packages/microsoft.netcore.app.host.linux-x64/10.0.12/microsoft.netcore.app.host.linux-x64.10.0.12.nupkg.sha512",
     "/home/zznty/.nuget/packages/microsoft.aspnetcore.app.ref/11.0.0-rc.1.26425.128/microsoft.aspnetcore.app.ref.11.0.0-rc.1.26425.128.nupkg.sha512"
   ],
   "logs": []
