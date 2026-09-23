@@ -36,7 +36,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install .NET SDK (x64)
+      - name: Install pinned SDK (global.json requires it)
+        uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
+        with:
+          architecture: x64
+          version: "11.0"
+
+      - name: Install the row's runtime
+        if: ${{ matrix.sdk != '11.0' }}
         uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
         with:
           architecture: x64
