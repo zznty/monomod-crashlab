@@ -23,7 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tfm: ["net10.0", "net11.0"]
+        include:
+          - { tfm: net10.0, sdk: "10.0" }
+          - { tfm: net11.0, sdk: "11.0" }
     env:
       DOTNET_ReadyToRun: "0"
       DOTNET_TC_QuicJitForLoops: "1"
@@ -38,12 +40,17 @@ jobs:
         uses: nike4613/install-dotnet@cc706db77ed67745a4a4cbae19b2869220e34d27
         with:
           architecture: x64
-          version: "11.0"
+          version: "${{ matrix.sdk }}"
 
       - name: Build
         run: |
           dotnet restore mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
           dotnet build --no-restore -c Release -f ${{ matrix.tfm }} mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
+
+      - name: Code layout probe (${{ matrix.tfm }})
+        run: |
+          dotnet build -c Release -f ${{ matrix.tfm }} codeprobe/codeprobe.csproj
+          dotnet codeprobe/bin/Release/${{ matrix.tfm }}/codeprobe.dll | tee out/codeprobe.txt
 
       - name: Run suite with counters
         run: |
