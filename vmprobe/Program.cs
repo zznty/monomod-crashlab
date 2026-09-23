@@ -43,6 +43,19 @@ while (true)
 sw.Stop();
 var usPerQuery = (double)queryTicks / Stopwatch.Frequency * 1e6 / Math.Max(regions, 1);
 Console.WriteLine($"region walk: regions={regions} wallMs={sw.ElapsedMilliseconds} usPerQuery={usPerQuery:F1} projectedMsForRegions={usPerQuery * regions / 1000:F0}");
+
+// MonoMod passes InfoSize = vm_region_submap_short_info_64.Count (12 ints = 48 bytes); the probe above passed
+// 64 ints. If a too-small info buffer makes the kernel reject the call, every query fails and the allocator's
+// search degrades to stepping one page at a time across the whole window (~480k probes).
+foreach (var cnt in new[] { 12, 13, 14, 16, 32, 64 })
+{
+    var a2 = target & ~(page - 1);
+    ulong s2 = 0; var d2 = int.MaxValue; var c2 = cnt;
+    var infoBuf = Marshal.AllocHGlobal(1024);
+    var kr = Native.mach_vm_region_recurse(task, ref a2, ref s2, ref d2, infoBuf, ref c2);
+    Console.WriteLine($"query with count={cnt}: kr={kr} returnedSize=0x{s2:x} (0 = failure)");
+    Marshal.FreeHGlobal(infoBuf);
+}
 }
 catch (Exception e)
 {
