@@ -60,7 +60,12 @@ Console.WriteLine("1GB buckets: " + string.Join(" ", buckets));
 
 // a native target (libc) is unreachable by rel32 from any managed code address, so every native detour
 // needs a near trampoline; report the distance for scale
-var native = (ulong)System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate((Func<ulong>)NativeProbe).ToInt64();
-Console.WriteLine($"managed=0x{min:x16} native(probe)=0x{native:x16} distanceGB={(native > min ? native - min : min - native) / (1024.0*1024*1024):F2}");
+try
+{
+    var del = (Func<ulong>)NativeProbe;
+    var native = (ulong)System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(del).ToInt64();
+    Console.WriteLine($"managed=0x{min:x16} native(probe)=0x{native:x16} distanceGB={(native > min ? native - min : min - native) / (1024.0*1024*1024):F2}");
+}
+catch (Exception e) { Console.WriteLine($"native distance unavailable: {e.GetType().Name}"); }
 
 static ulong NativeProbe() => 0;

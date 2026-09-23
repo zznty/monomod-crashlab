@@ -55,6 +55,7 @@ jobs:
           dotnet build --no-restore -c Release -f ${{ matrix.tfm }} mono-mod/src/MonoMod.UnitTest/MonoMod.UnitTest.csproj
 
       - name: Code layout probe (${{ matrix.tfm }})
+        continue-on-error: true
         run: |
           mkdir -p out
           dotnet build -c Release -f ${{ matrix.tfm }} codeprobe/codeprobe.csproj
