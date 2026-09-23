@@ -15,9 +15,10 @@ var target = (ulong)typeof(Target).GetMethod(nameof(Target.Code), BindingFlags.P
 var page = 16384UL;
 Console.WriteLine($"target page = 0x{target & ~(page - 1):x16}");
 
+var task = Native.task_self_trap();
+
 try
 {
-var task = Native.task_self_trap();
 
 // (a) walk the region map outward from the target, exactly like the allocator's search does
 var addr = target & ~(page - 1);
@@ -75,6 +76,34 @@ for (int i = 0; i < 200; i++)
 }
 mmapSw.Stop();
 Console.WriteLine($"malloc64/free: {mallocSw.Elapsed.TotalMicroseconds / 2000:F2}us per pair; mmap/munmap page: {mmapSw.Elapsed.TotalMicroseconds / 200:F2}us per pair");
+// MonoMod's own walk semantics, run from both a code address and a native (libSystem) address:
+//   success + mapped   -> advance page = baseAddr + allocSize (whole region, upward) / baseAddr - PageSize (downward)
+//   success + free gap -> try map; on failure advance as above
+//   failure            -> advance one page
+// Count how many probes it takes to cross the +-2GB window in each direction.
+foreach (var (label, startAddr) in new[] { ("code", target), ("native", (ulong)System.Runtime.InteropServices.NativeLibrary.GetExport(System.Runtime.InteropServices.NativeLibrary.Load("libSystem.B.dylib"), "malloc")) })
+{
+    long probes = 0, queryFailures = 0;
+    foreach (var goingUp in new[] { true, false })
+    {
+        var p2 = startAddr & ~(page - 1);
+        while (true)
+        {
+            var distance = p2 > startAddr ? p2 - startAddr : startAddr - p2;
+            if (distance > window) break;
+            probes++;
+            var a3 = p2; ulong s3 = 0; var d3 = int.MaxValue; var c3 = 12;
+            var info3 = Marshal.AllocHGlobal(64);
+            var kr3 = Native.mach_vm_region_recurse(task, ref a3, ref s3, ref d3, info3, ref c3);
+            Marshal.FreeHGlobal(info3);
+            if (kr3 != 0 || s3 == 0) { queryFailures++; p2 = goingUp ? p2 + page : p2 - page; }
+            else { p2 = goingUp ? a3 + s3 : a3 - page; }
+            if (probes > 2_000_000) break;
+        }
+    }
+    Console.WriteLine($"walk from {label} (0x{startAddr:x16}): probes={probes} queryFailures={queryFailures}");
+}
+
 Console.WriteLine($"total probe time: {total.ElapsedMilliseconds}ms");
 
 static class Native

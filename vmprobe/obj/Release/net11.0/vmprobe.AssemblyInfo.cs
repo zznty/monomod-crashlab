@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("vmprobe")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bd1698b75b150d0258adc3219947b5ad7afd1ff9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c82355555795776ce1e24bcb106f714d064075ca")]
 [assembly: System.Reflection.AssemblyProductAttribute("vmprobe")]
 [assembly: System.Reflection.AssemblyTitleAttribute("vmprobe")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
